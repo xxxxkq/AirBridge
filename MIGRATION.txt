@@ -1,0 +1,29 @@
+AirBridge 2.49.7 -> 3.0.0 migration map
+
+Runtime composition
+Desktop/Program.cs: native managed entry point, single-instance activation, isolated self-test, pre-migration settings backup.
+Desktop/MainView.cs: WPF shell, navigation, status notices, shutdown.
+Desktop/DesktopView.cs: tray menu, shortcut registration, notifications, startup shortcut, theme.
+Desktop/PreferencesView.cs: preferences, language, hotkey editor.
+Desktop/DevicesView.cs: shared device card layout, endpoint and phone input controls, ignored/unavailable groups.
+Desktop/BatteriesView.cs: successful-reading persistence, stale cache retention, background retry, Windows fallback, cautious AirPods matching.
+Desktop/InventoryService.cs: SetupAPI enumeration and Core Audio endpoint association; replaces Get-PnpDevice subprocess/runspace.
+Desktop/PhoneService.cs: per-phone connection ownership, ordinary APC lifetime, cancellation/release barrier, reconnect intent.
+Desktop/RouteCoordinator.cs: graph handoff, apply/stop, saved running intent, readiness retry, output recovery coordination.
+Desktop/GraphView.cs: node library, graph editing, module/application editors and validation.
+Desktop/SettingsStore.cs: compatible JSON persistence, atomic replacement, fallback backup and unknown-key preservation.
+UI/*.cs and Platform/*.cs: original rendering, effects, audio and recovery implementations retained.
+Platform/ProcessCapture.cpp: original native capture implementation retained.
+
+Build-only PowerShell remains permitted and is not included or invoked at runtime.
+The release does not reference System.Management.Automation and contains no .ps1/.psm1/.cmd/.bat or driver files.
+
+Verification
+1. WPF self-test: navigation, minimize/hide/restore, localization, library bounds and fixed header, graph add/delete, all ten module editors, tray actions and battery cache retention.
+2. Read-only hardware inspection: SetupAPI + Core Audio + paired phone discovery, unchanged default output, zero receiver connections opened.
+3. MigrationTests: copied actual legacy settings roundtrip, unknown keys, release barriers, late completion cleanup, ownership, reconnect pause and Stop intent.
+4. AdvancedGraph tests: synthetic mixer/select, cycle rejection, pitch frequency, WAV finalization, unchanged PCM, source reuse/cleanup and local RTP roundtrip.
+5. DefaultRoute mock-backend tests: role selection, reapply, rollback, crash journal, external override and disconnected original.
+
+The new host has not yet undergone a live phone listening session. Hardware inspection does not prove Bluetooth audio playback quality. The proven capture engine is unchanged, but the C# host lifecycle is new.
+Keep the 2.49.7 directory and archive. Do not delete them as part of release cleanup.

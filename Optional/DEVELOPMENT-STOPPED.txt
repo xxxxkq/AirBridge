@@ -1,0 +1,2 @@
+Development decision 2026-11-09
+User cancelled driver-related development, including AAP drivers and virtual audio drivers. Optional sources remain historical research only, excluded from production builds and distribution. Do not resume or install them without a new explicit request. Production uses model-specific Bluetooth advertisements and Windows media controls for wear playback.

@@ -1,0 +1,12 @@
+AAP changes relative to UPSTREAM.json (2026-11-09), GPL-3.0 retained:
+Driver/ is the modified build input. vendor/ntpods stays unchanged for provenance.
+- Explicit exclusive administrator/SYSTEM device ACL and passive WDF callbacks.
+- Query BTHENUM's remote BTH_DEVICE_INFO; fail closed if unavailable/invalid.
+- Connect must match the bound device address and PSM 0x1001.
+- IOCTL buffers capped at 4096, read wait capped at 1000ms, exact connect ABI.
+- ATT IOCTLs rejected; unused ATT implementation and work item removed.
+- Failed close returns the error and retains channel ownership for a retry.
+Native BRBs use a 10-second synchronous timeout and retain buffers until completion;
+managed OVERLAPPED cancellation drains completion before freeing its buffers.
+Actual cancellation/remote disconnect/suspend behavior is still a hardware test item.
+No production crash-recovery guarantees; no security settings changed.
