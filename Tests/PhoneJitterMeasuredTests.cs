@@ -1,0 +1,24 @@
+﻿using System;
+using System.Reflection;
+using System.Linq;
+using AirBridge.Routing;
+using NAudio.Wave;
+class PhoneJitterMeasuredTests {
+ static int passed;static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);passed++;}
+ static void Main(){var settings=new PlaybackTuning();var jitter=new PhoneArrivalJitter();double time=0;jitter.Observe(time,10,settings);for(int i=0;i<300;i++)jitter.Observe(time+=10,10,settings);Check(jitter.Valid&&!jitter.SupplyDeficit&&jitter.StandardDeviationMilliseconds<.001,"regular PCM arrivals have no invented jitter");
+  jitter.Reset();jitter.Observe(0,10,settings);time=0;for(int i=0;i<400;i++)jitter.Observe(time+=(i%4==0?40:0),10,settings);Check(!jitter.SupplyDeficit&&jitter.StandardDeviationMilliseconds>17&&jitter.Suggested(settings)==50,"batch jitter measured independently of average supply");
+  jitter.Observe(time+=1000,10,settings);Check(!jitter.Valid&&jitter.StandardDeviationMilliseconds==0,"pause resets measurement instead of treating gap as jitter");for(int i=0;i<300;i++)jitter.Observe(time+=10,10,settings);Check(jitter.Suggested(settings)==30,"measurement recovers after pause");
+  jitter.Reset();jitter.Observe(0,10,settings);for(int i=1;i<=300;i++)jitter.Observe(i*25,10,settings);Check(jitter.SupplyDeficit,"persistent supply shortage distinguished from variance");
+  var adaptive=new PhoneJitterBuffer();adaptive.SetTuning(settings);adaptive.Configure(30,true);time=0;for(int i=0;i<400;i++)adaptive.ObserveArrival(time+=(i%4==0?40:0),10);Check(adaptive.TargetMilliseconds==50,"measured jitter raises target in bounded steps");for(int i=0;i<2000;i++){adaptive.ObserveArrival(time+=10,10);adaptive.CanRead(100);}Check(adaptive.TargetMilliseconds==30,"stable measured target falls back gradually");
+  adaptive.Configure(10,false);time=0;for(int i=0;i<400;i++)adaptive.ObserveArrival(time+=(i%4==0?40:0),10);Check(adaptive.TargetMilliseconds==10,"buffer-off remains fixed despite jitter");
+  settings.JitterMeasurement=0;adaptive.SetTuning(settings);adaptive.Configure(30,true);for(int i=0;i<400;i++)adaptive.ObserveArrival(time+=(i%4==0?40:0),10);Check(adaptive.TargetMilliseconds==30,"measurement switch restores feedback-only policy");
+  var cut=new PhoneCutCrossfade();byte[] old=new byte[40];for(int i=0;i<old.Length;i+=2)old[i+1]=32;cut.Begin(old);var b=Enumerable.Repeat(-.25f,882).ToArray();cut.Apply(b,441);Check(b[0]==.25f&&b[18]==-.25f&&b.All(x=>Math.Abs(x)<=.25f),"crossfade matches old and new endpoints without overshoot");
+  b=Enumerable.Repeat(-.25f,882).ToArray();cut.Apply(b,441);Check(b.All(x=>x==-.25f),"crossfade only applies once");
+  CheckSourceTrim();Console.WriteLine("PASS total="+passed+"; no audio hardware opened");
+ }
+ static void CheckSourceTrim(){var flags=BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic;var type=typeof(GraphRuntime).GetNestedType("Source",BindingFlags.NonPublic);var s=Activator.CreateInstance(type,flags,null,new object[]{"p:offline",null},null);var buffer=new BufferedWaveProvider(new WaveFormat(44100,16,2)){ReadFully=true};type.GetField("buffer",flags).SetValue(s,buffer);type.GetField("sample",flags).SetValue(s,buffer.ToSampleProvider());var tune=new PlaybackTuning{PhoneHardLimitMs=50,CutCrossfadeMs=5};type.GetMethod("ApplyTuning").Invoke(s,new object[]{tune,false});var inject=type.GetMethod("Inject");var read=type.GetMethod("Read");Func<int,byte[]> pcm=value=>{var bytes=new byte[1764];for(int i=0;i<bytes.Length;i+=2){bytes[i]=(byte)value;bytes[i+1]=(byte)(value>>8);}return bytes;};inject.Invoke(s,new object[]{pcm(8192)});read.Invoke(s,null);
+  for(int i=0;i<5;i++)inject.Invoke(s,new object[]{pcm(8192)});inject.Invoke(s,new object[]{pcm(-8192)});var metrics=(AudioReadMetrics)type.GetField("Metrics").GetValue(s);Check(metrics.QueueTrimCount==1&&metrics.QueueClearCount==0&&metrics.QueueTrimmedBytes==5*1764&&buffer.BufferedBytes==1764,"finite trim keeps newest target and counts exact discarded bytes");var block=(float[])read.Invoke(s,null);Check(block[0]==.25f&&block[438]==-.25f&&block.Last()==-.25f,"source splices old continuation into retained new audio");Check(metrics.MissingBytes==0,"finite trim does not invent underflow");var policy=(PhoneJitterBuffer)type.GetField("Jitter").GetValue(s);Check((double)typeof(PhoneArrivalJitter).GetField("last",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(policy.Arrival)>0,"arrival clock works with timing diagnostics disabled");
+  // Effective hard limit must stay above a large target even if user picks a low threshold.
+  tune.InitialBufferMs=80;tune.MinimumBufferMs=80;tune.MaximumBufferMs=120;type.GetMethod("ApplyTuning").Invoke(s,new object[]{tune,true});for(int i=0;i<8;i++)inject.Invoke(s,new object[]{pcm(4096)});Check(buffer.BufferedBytes==8*1764&&((float[])read.Invoke(s,null)).Any(x=>x!=0),"hard threshold cannot prevent initial priming");
+ }
+}

@@ -1,0 +1,71 @@
+AirBridge optional extensions 0.2 — INSTALLATION HOLD
+
+This is a combined development bundle, NOT a setup program. Preflight.ps1 only
+checks hashes and signature information. It cannot install or change settings.
+Components are selected independently with Build.ps1 -Components Aap,VirtualAudio.
+Production AirBridge 3.0.22 and startup remain unchanged. Do not copy these DLLs
+into its folder. Runtime activation/UI integration remains gated on hardware tests.
+
+Aap: separate NTPods AAP Bluetooth service profile driver, GPL-3.0 source included.
+VirtualAudio: separate AirBridge SysVAD virtual render endpoint, Microsoft upstream
+and corresponding local source included. No private keys, certificates, system-wide
+WDK installer or original third-party installation scripts are bundled.
+Source builds refer to the original workspace's existing compiler/WDK and paths.
+This is corresponding source for reproducibility, not a standalone build SDK.
+
+INSTALLATION PREREQUISITES (not executed)
+Both packages are rebuilt unsigned, even though an older virtual-audio candidate
+was previously test-signed. Its signature does NOT cover this new build or AAP.
+A generated CAT is not a trusted signature. Do not import old private signing data.
+Before installation, resolve the security audit items in preflight.json, choose a
+signing route, verify SYS/CAT under kernel policy, and perform a fresh elevated
+read-only check of Secure Boot, test signing, HVCI and disk encryption.
+No settings changes, trust imports, reboot or driver installation are authorized yet.
+
+INSTALLATION TRANSACTION DESIGN
+Record selected components, exact file hashes, original per-device driver bindings,
+all default audio role endpoint IDs and initial security state. Journal each completed
+step separately; partial failure must never report the whole bundle installed.
+AAP binds to the paired AirPods AAP service PDO. Do not bind it to the Intel radio,
+A2DP/HFP devices or another manufacturer's Bluetooth service. Device identity and
+kernel address validation must be resolved before this operation.
+VirtualAudio requires a dedicated Root\AirBridgeVirtualAudio device instance in
+addition to its Driver Store package; merely adding the INF is insufficient.
+Record the actual published oemNN.inf and instance IDs, never guess them.
+Stop before further work on reboot-required or binding errors. No /force fallback.
+
+FIRST HARDWARE TEST AFTER SEPARATE APPROVAL
+Install/test each component separately before testing both together.
+AAP: receive-only reports first, then one explicitly requested noise-mode change;
+check reconnect, sleep/resume, stop and process-crash cleanup.
+VirtualAudio: explicit synthetic source targeting only its new endpoint; count PCM
+frames without recording personal audio or changing system/app default outputs.
+Windows may change defaults when a new endpoint appears: compare pre/post snapshots
+and stop on a difference. Any restoration write must be separately authorized.
+Only after a real recovery writer/broker is validated may system audio be redirected
+into the virtual endpoint and sent through effect chains to multiple physical sinks.
+The old recovery observer is READ-ONLY and is not represented as crash protection.
+
+SYSTEM IMPACT
+Installed drivers remain in Driver Store after AirBridge exits. AAP adds a Bluetooth
+profile binding; VirtualAudio adds one persistent virtual render device and service.
+No replacement of Intel/Realtek is intended. Installation can trigger audio/Bluetooth
+reenumeration and interrupt playback. Kernel defects can crash Windows; a user-mode
+guard cannot prevent that. Test signing/firmware changes affect the whole system and
+may require reboot or BitLocker recovery; do not change them without a new approval.
+
+ROLLBACK DESIGN
+Stop sources and close handles. Restore only output settings this experiment changed,
+using the pre-install snapshot and respecting later user choices. Remove only recorded
+AirBridge root device/AAP binding and exact published driver packages; restore the
+previous AAP binding if one existed. Do not delete all Bluetooth/audio drivers.
+Remove only newly introduced certificate thumbprints and restore only security values
+changed during this experiment, then reboot/recheck if required. With partial install,
+roll back only completed steps from the journal. Current bundle has installed nothing.
+If Windows cannot start, use recovery/safe mode with the recorded package identity;
+verify the Windows volume before removing any offline package.
+
+References:
+https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/driver-signing-offerings
+https://learn.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option
+https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/pnputil-command-syntax
