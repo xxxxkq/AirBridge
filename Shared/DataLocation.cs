@@ -11,6 +11,15 @@ namespace AirBridge.Storage {
   internal static string LegacyRoot {get{return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AirBridge");}}
   internal static string Launcher {get{string path=Environment.GetEnvironmentVariable("AIRBRIDGE_LAUNCH_PATH");return !String.IsNullOrEmpty(path)&&Path.IsPathRooted(path)&&File.Exists(path)?path:System.Reflection.Assembly.GetEntryAssembly().Location;}}
   internal static string Pointer(string launch){return Path.ChangeExtension(Path.GetFullPath(launch),".storage.xml");}
+  internal static string PortableRoot(string launch){return Full(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(launch)),"Data"));}
+  static bool HasProfile(string root){return new[]{"settings.json","settings.json.bak","AirBridge-default-output-recovery.xml","AirBridge-app-routing-recovery.xml"}.Any(name=>File.Exists(Path.Combine(root,name)));}
+  static DataResolution InitialLocation(string launch,string legacy,bool initialize){
+   string portable=PortableRoot(launch);var result=new DataResolution{Root=portable};
+   // Keep existing profiles and restoration journals reachable. Switching them uses the migration UI.
+   if(!HasProfile(portable)&&HasProfile(legacy)){result.Root=Full(legacy);result.Notice="已保留原数据位置；可在偏好设置中迁移到软件旁的 Data。 / Existing data retained; move it beside the EXE from Preferences.";return result;}
+   if(initialize)try{Probe(portable);}catch(Exception ex){if(!(ex is IOException)&&!(ex is UnauthorizedAccessException))throw;Probe(legacy);result.Root=Full(legacy);result.Notice="软件旁的 Data 无法写入，已使用 Windows 用户数据目录；可在偏好设置中更改。 / Data beside the EXE is not writable; using the Windows user data folder.";}
+   return result;
+  }
   internal static string Current {get{string inherited=Environment.GetEnvironmentVariable(EnvironmentKey);return !String.IsNullOrEmpty(inherited)&&Path.IsPathRooted(inherited)?Path.GetFullPath(inherited):Resolve(Launcher,LegacyRoot,false,null).Root;}}
   static string Full(string path){if(String.IsNullOrWhiteSpace(path)||!Path.IsPathRooted(path)||path.StartsWith(@"\\",StringComparison.Ordinal))throw new IOException("请选择本地磁盘中的专用数据目录。 / Select a dedicated local data folder.");string full=Path.GetFullPath(path);if(full.TrimEnd('\\','/')==Path.GetPathRoot(full).TrimEnd('\\','/'))throw new IOException("不能使用磁盘根目录作为数据目录。 / The drive root cannot be a data folder.");return full.TrimEnd('\\','/');}
   static bool Equal(string a,string b){return String.Equals(Full(a),Full(b),StringComparison.OrdinalIgnoreCase);}
@@ -41,7 +50,7 @@ namespace AirBridge.Storage {
    // A storage lock also serializes two simultaneous cold starts of the same portable copy.
    string hash;using(var sha=SHA256.Create())hash=BitConverter.ToString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(pointer.ToUpperInvariant()))).Replace("-","");
    using(var gate=new Mutex(false,@"Local\AirBridge.Storage."+hash)){bool held=false;try{try{held=gate.WaitOne(30000);}catch(AbandonedMutexException){held=true;}if(!held)throw new IOException("Data location is busy");
-    var doc=Read(pointer);if(doc==null)return result;var e=doc.DocumentElement;result.Root=Active(e,launch,legacy,"");
+    var doc=Read(pointer);if(doc==null)return InitialLocation(launch,legacy,migrate);var e=doc.DocumentElement;result.Root=Active(e,launch,legacy,"");
     if(!migrate||!e.HasAttribute("pending-mode"))return result;
     try{
      if(recoveryReady!=null&&!recoveryReady()||!JournalsEmpty(result.Root)){result.Notice="输出恢复尚未完成，暂用原数据目录；下次启动重试迁移。 / Output recovery pending; using the previous data folder.";return result;}

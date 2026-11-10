@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,7 +16,7 @@ namespace AirBridge.Desktop {
    var row=new Grid();row.ColumnDefinitions.Add(new ColumnDefinition{Width=new GridLength(210)});row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});
    string portable=Path.Combine(Path.GetDirectoryName(ApplicationLaunchPath.Current),"Data"),selectedPath=settings.Root;
    if(!settings.Test){string saved=DataLocation.PendingTarget(ApplicationLaunchPath.Current,DataLocation.LegacyRoot);if(saved!=null)selectedPath=saved;}
-   var mode=new ComboBox{Height=36,ItemsSource=new[]{L("软件旁的 Data 文件夹","Data beside the EXE"),L("自定义目录","Custom folder"),L("Windows 用户数据目录","Windows user data folder")},SelectedIndex=String.Equals(selectedPath,portable,StringComparison.OrdinalIgnoreCase)?0:String.Equals(selectedPath,DataLocation.LegacyRoot,StringComparison.OrdinalIgnoreCase)?2:1};row.Children.Add(mode);
+   var mode=new ComboBox{Height=36,ItemsSource=new[]{L("软件旁的 Data 文件夹（默认）","Data beside the EXE (default)"),L("自定义目录","Custom folder"),L("Windows 用户数据目录","Windows user data folder")},SelectedIndex=String.Equals(selectedPath,portable,StringComparison.OrdinalIgnoreCase)?0:String.Equals(selectedPath,DataLocation.LegacyRoot,StringComparison.OrdinalIgnoreCase)?2:1};row.Children.Add(mode);
    var destination=new TextBox{Text=selectedPath,IsReadOnly=true,Height=36,Margin=new Thickness(10,0,0,0),Padding=new Thickness(10,0,10,0),ToolTip=selectedPath};Grid.SetColumn(destination,1);row.Children.Add(destination);
    var browse=Button(L("浏览…","Browse…"),()=>{using(var dialog=new System.Windows.Forms.FolderBrowserDialog{Description=L("选择专用数据目录；迁移时目标需为空。","Select a dedicated folder; migration needs an empty destination."),ShowNewFolderButton=true}){if(dialog.ShowDialog()==System.Windows.Forms.DialogResult.OK){mode.SelectedIndex=1;destination.Text=dialog.SelectedPath;destination.ToolTip=dialog.SelectedPath;}}});browse.Height=36;browse.Padding=new Thickness(12,0,12,0);browse.Margin=new Thickness(8,0,0,0);browse.Visibility=mode.SelectedIndex==1?Visibility.Visible:Visibility.Collapsed;Grid.SetColumn(browse,2);row.Children.Add(browse);details.Children.Add(row);
    var copyRow=new Grid{Margin=new Thickness(0,12,0,0)};copyRow.ColumnDefinitions.Add(new ColumnDefinition());copyRow.ColumnDefinitions.Add(new ColumnDefinition{Width=GridLength.Auto});var copyLabel=Label(L("迁移现有配置与日志","Copy current configuration and logs"),13);copyLabel.VerticalAlignment=VerticalAlignment.Center;copyRow.Children.Add(copyLabel);
