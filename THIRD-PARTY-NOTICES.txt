@@ -1,4 +1,4 @@
-﻿NAudio.Core 2.2.1 / NAudio.Wasapi 2.2.1
+NAudio.Core 2.2.1 / NAudio.Wasapi 2.2.1
 Source: https://github.com/naudio/NAudio/tree/v2.2.1
 Packages: https://api.nuget.org/v3-flatcontainer/naudio.core/2.2.1/naudio.core.2.2.1.nupkg and https://api.nuget.org/v3-flatcontainer/naudio.wasapi/2.2.1/naudio.wasapi.2.2.1.nupkg
 
@@ -17,3 +17,9 @@ AirPodsDesktop, https://github.com/SpriteOvO/AirPodsDesktop
 Apple Continuity proximity advertisement field semantics were reviewed against
 Source/Core/AppleCP.h and AppleCP.cpp (upstream GPL-3.0-or-later).
 AirBridge implements its own byte decoder, state policy and Windows media adapter.
+
+
+Optional historical AAP research (excluded from production builds and binaries):
+NTPods: https://github.com/arctumn/ntpods, GPL-3.0; original license and provenance retained under Optional/Aap/vendor/ntpods/ and Optional/Aap/UPSTREAM.json.
+Other protocol research materials retain their upstream licenses under Optional/Aap/research/.
+AirBridge-owned application source is licensed under GPL-3.0-only; see LICENSE. Existing third-party copyrights and licenses are not replaced by the root license.

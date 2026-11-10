@@ -7,6 +7,7 @@ namespace AirBridge.Desktop {
  internal static class OutputRecovery {
   const string Gate=@"Local\AirBridge.DefaultOutputRecovery.v1";static Process watcher;static bool watcherReady;
   static string Journal(string root){return Path.Combine(root,"AirBridge-default-output-recovery.xml");}
+  internal static string UpdateWatcherStamp(){return UpdateInstaller.Stamp(watcher);}
   static bool Acquire(Mutex gate,int timeout){try{return gate.WaitOne(timeout);}catch(AbandonedMutexException){return true;}}
   static void Restore(string root){
    Exception failure=null;

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Bundle)
+﻿param([Parameter(Mandatory=$true)][string]$Bundle)
 # PowerShell 7; creates only project files. NEVER imports certificates or installs.
 $ErrorActionPreference='Stop'
 $Bundle=(Resolve-Path -LiteralPath $Bundle).Path
@@ -16,8 +16,8 @@ if(!(Test-Path -LiteralPath $pfx)){
 }
 $password=[Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($secret),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))
 $cert=[Security.Cryptography.X509Certificates.X509Certificate2]::new($pfx,$password,[Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet)
-$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
-$packages=Join-Path $workspace 'AirBridge2_49_1\VirtualAudio\packages'
+$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
+$packages=Join-Path $workspace '02_AirBridge运行版本\AirBridge2_49_1\VirtualAudio\packages'
 $sign=Join-Path $packages 'microsoft.windows.sdk.cpp.10.0.26100.9457\c\bin\10.0.26100.0\x64\signtool.exe'
 $inf2cat=Join-Path $packages 'Microsoft.Windows.WDK.x64.10.0.26100.6584\c\bin\10.0.26100.0\x86\Inf2Cat.exe'
 $out=Join-Path $PSScriptRoot ('signed-candidates\'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))

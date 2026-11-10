@@ -1,7 +1,7 @@
-# Compile only. No signing, certificate changes, driver staging or installation.
+﻿# Compile only. No signing, certificate changes, driver staging or installation.
 $ErrorActionPreference='Stop'
-$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
-$packages=Join-Path $workspace 'AirBridge2_49_1\VirtualAudio\packages'
+$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
+$packages=Join-Path $workspace '02_AirBridge运行版本\AirBridge2_49_1\VirtualAudio\packages'
 $msvc='C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207'
 $wdk=Join-Path $packages 'Microsoft.Windows.WDK.x64.10.0.26100.6584\c'
 $sdk=Join-Path $packages 'microsoft.windows.sdk.cpp.10.0.26100.9457\c'

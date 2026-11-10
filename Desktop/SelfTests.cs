@@ -1,3 +1,4 @@
+#if AIRBRIDGE_DEVELOPMENT
 using System;
 using System.IO;
 using System.Linq;
@@ -89,3 +90,5 @@ namespace AirBridge.Desktop {
  }
 }
 
+
+#endif

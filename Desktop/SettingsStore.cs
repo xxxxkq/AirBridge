@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -13,6 +13,7 @@ namespace AirBridge.Desktop {
    foreach(string file in new[]{Path,Path+".bak"}){try{if(!File.Exists(file))continue;var saved=Json.Deserialize<Dictionary<string,object>>(File.ReadAllText(file));if(saved==null||!saved.ContainsKey("AutoConnect"))continue;foreach(var pair in saved)values[pair.Key]=pair.Value;break;}catch{}}
   }
   public static Dictionary<string,object> Defaults(){return new Dictionary<string,object>{
+   {"UpdateChecksEnabled",false},{"UpdatesDisabled",false},{"UpdateSkipDate",""},{"UpdateIgnoredTag",""},{"UpdateLastCheckUtc",""},
    {"ResumeGraph",false},{"LastRunningGraph",null},{"NodeLibraryCollapsed",false},{"EditorWorkflow",2},{"AudioAppNodes",new object[0]},{"AudioModules",new object[0]},
    {"AudioCanvasNodes",new[]{"pc:system","o:default"}},{"AudioLinks",new[]{new UI.AudioLink{Source="pc:system",Target="o:default",SourceName="电脑媒体声音",TargetName="系统默认播放器"}}},{"AudioNodePositions",new object[0]},
    {"PlaybackTuning",new Routing.PlaybackTuning()},{"VirtualCableEnabled",false},{"PhoneAntiStutter",true},{"TakeOverPcAudio",true},{"IgnoredDevices",new object[0]},{"SidebarCollapsed",false},{"Language","zh-CN"},{"AutoConnect",true},{"PopupEnabled",true},{"LastSourceId",""},{"LastSourceName",""},{"RememberedSources",new string[0]},

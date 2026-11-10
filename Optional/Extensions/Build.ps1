@@ -1,9 +1,9 @@
-param([ValidateSet('Aap','VirtualAudio')][string[]]$Components=@('Aap','VirtualAudio'))
+﻿param([ValidateSet('Aap','VirtualAudio')][string[]]$Components=@('Aap','VirtualAudio'))
 # Build and stage only. Never install/sign/trust or select audio endpoints.
 $ErrorActionPreference='Stop'
-$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
-$managed=Join-Path $workspace 'AirBridge.Managed'
-$virtual=Join-Path $workspace 'AirBridge2_49_1\VirtualAudio'
+$workspace=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
+$managed=Join-Path $workspace '01_项目源码\AirBridge.Managed'
+$virtual=Join-Path $workspace '02_AirBridge运行版本\AirBridge2_49_1\VirtualAudio'
 $aap=Join-Path $managed 'Optional\Aap'
 $out=Join-Path $PSScriptRoot ('artifacts\'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $out -Force|Out-Null

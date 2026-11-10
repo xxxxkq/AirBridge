@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,6 +18,7 @@ namespace AirBridge.Routing {
   public int PendingAppRestores {get{if(!System.Threading.Monitor.TryEnter(applyGate))return Volatile.Read(ref pendingRestoresSnapshot);try{int count=(appRoutes==null?0:appRoutes.PendingCount)+(defaultRoute==null?0:defaultRoute.PendingCount);Volatile.Write(ref pendingRestoresSnapshot,count);return count;}finally{System.Threading.Monitor.Exit(applyGate);}}}
   public void LoadAppRecovery(){lock(applyGate){if(appRoutes==null)appRoutes=new NativeAppRoutes(AppRoutingJournal);if(defaultRoute==null&&!String.IsNullOrWhiteSpace(DefaultRoutingJournal))defaultRoute=new DefaultOutputRoute(DefaultRoutingJournal);}}
   public void RestoreAppRecovery(){lock(applyGate){LoadAppRecovery();appRoutes.Restore();if(defaultRoute!=null)defaultRoute.Restore();managedApps=new GraphEdge[0];}}
+  public void RememberOutputSelection(string id){lock(applyGate){if(defaultRoute==null)return;var endpoint=AirBridge.Platform.Audio.List().FirstOrDefault(e=>e.Id==id&&e.Active);if(endpoint==null||VirtualCableRouting.IsCablePlayback(endpoint))return;defaultRoute.RememberUserSelection(id);}}
   public Task[] PendingPhoneReleases=new Task[0];
   public string Notice="";public volatile bool TakeOverNativePlayback;volatile bool stopping;public int SourceStarts;long blocks,nativeProgress;public string Error="";
   public long RenderProgress {get{return Interlocked.Read(ref blocks);}}
@@ -31,7 +32,7 @@ namespace AirBridge.Routing {
   void Meter(GraphEdge edge,float[] block,float gain){if(HasSignal(block,gain))MarkSignal(edge.Source==virtualCapture?virtualSource:edge.Source,virtualDefaultAlias&&edge.Target==virtualPhysical?"o:default":edge.Target);}
   void MarkSignal(string source,string target){lock(meterGate)signalAt[EdgeKey(source,target)]=Stopwatch.GetTimestamp();}
   public string[] ActiveEdges(){lock(meterGate){long now=Stopwatch.GetTimestamp();foreach(var key in signalAt.Where(p=>(now-p.Value)/(double)Stopwatch.Frequency>=.65).Select(p=>p.Key).ToArray())signalAt.Remove(key);return signalAt.Keys.ToArray();}}
-  void MeterNative(){if(!applied)return;var apps=managedApps;using(var enumerator=new MMDeviceEnumerator())foreach(var endpoint in enumerator.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active))using(endpoint){if(endpoint.AudioEndpointVolume.Mute||endpoint.AudioEndpointVolume.MasterVolumeLevelScalar<=0)continue;var sessions=endpoint.AudioSessionManager.Sessions;for(int i=0;i<sessions.Count;i++)using(var session=sessions[i]){uint pid=session.GetProcessID;if(pid==(uint)Process.GetCurrentProcess().Id||(session.DisplayName??"").IndexOf("A2DP SNK",StringComparison.OrdinalIgnoreCase)>=0||session.SimpleAudioVolume.Mute||session.SimpleAudioVolume.Volume<=0||session.AudioMeterInformation.MasterPeakValue<.001)continue;var app=apps.FirstOrDefault(a=>UInt32.Parse(a.Source.Split(':')[1])==pid);if(app!=null&&app.Source!=virtualSource)MarkSignal(app.Source,app.Target);else if(nativePassThrough&&virtualSource!="pc:system")MarkSignal("pc:system",nativeTarget);}}}
+  void MeterNative(){if(!applied)return;var apps=managedApps;if(!nativePassThrough&&apps.Length==0)return;using(var enumerator=new MMDeviceEnumerator())foreach(var endpoint in enumerator.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active))using(endpoint){if(endpoint.AudioEndpointVolume.Mute||endpoint.AudioEndpointVolume.MasterVolumeLevelScalar<=0)continue;var sessions=endpoint.AudioSessionManager.Sessions;for(int i=0;i<sessions.Count;i++)using(var session=sessions[i]){uint pid=session.GetProcessID;if(pid==(uint)Process.GetCurrentProcess().Id||(session.DisplayName??"").IndexOf("A2DP SNK",StringComparison.OrdinalIgnoreCase)>=0||session.SimpleAudioVolume.Mute||session.SimpleAudioVolume.Volume<=0||session.AudioMeterInformation.MasterPeakValue<.001)continue;var app=apps.FirstOrDefault(a=>UInt32.Parse(a.Source.Split(':')[1])==pid);if(app!=null&&app.Source!=virtualSource)MarkSignal(app.Source,app.Target);else if(nativePassThrough&&virtualSource!="pc:system")MarkSignal("pc:system",nativeTarget);}}}
   public static ApplicationInput[] Applications(){var found=new Dictionary<uint,ApplicationInput>();using(var e=new MMDeviceEnumerator())foreach(var d in e.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active))using(d){var sessions=d.AudioSessionManager.Sessions;for(int i=0;i<sessions.Count;i++)using(var s=sessions[i]){uint pid=s.GetProcessID;if(pid==0||pid==(uint)Process.GetCurrentProcess().Id||found.ContainsKey(pid)||(s.DisplayName??"").IndexOf("A2DP SNK",StringComparison.OrdinalIgnoreCase)>=0)continue;try{using(var p=Process.GetProcessById((int)pid)){found[pid]=new ApplicationInput{Id="a:"+pid+":"+p.StartTime.ToUniversalTime().Ticks,Name=p.ProcessName+" · "+pid,Path=ApplicationIdentity.ProcessPath(p)};}}catch{}}}return found.Values.OrderBy(x=>x.Name).ToArray();}
   // Reconcile application policy without rebuilding phone capture or render buffers.
   public Task UpdateApplicationRoutesAsync(GraphEdge[] edges){return Task.Run(()=>{lock(applyGate){if(stopping)throw new ObjectDisposedException("GraphRuntime");if(edges.Any(e=>!e.Source.StartsWith("a:")||!e.Target.StartsWith("o:")||e.Gain!=1))throw new ArgumentException("Invalid native application route");LoadAppRecovery();if(VirtualPcActive)edges=edges.Select(e=>new GraphEdge{Source=e.Source,Target=e.Target=="o:default"?virtualPhysical:e.Target,Gain=e.Gain}).ToArray();appRoutes.Apply(edges);lock(gate)managedApps=edges;}});}
@@ -105,7 +106,9 @@ namespace AirBridge.Routing {
   }}
   bool phoneBuffering=true;
   public void SetPhoneBuffering(bool enabled){lock(applyGate){if(stopping)throw new ObjectDisposedException("GraphRuntime");if(phoneBuffering==enabled)return;phoneBuffering=enabled;lock(gate)foreach(var source in sources.Values)source.ApplyTuning(tuning,enabled);}}
+#if AIRBRIDGE_DEVELOPMENT
   public void ConfigurePhoneBuffers(int milliseconds,bool adaptive,bool diagnostics){PhoneWorkerClient[] workers;lock(gate){foreach(var source in sources.Values)source.ConfigureJitter(milliseconds,adaptive);workers=sources.Values.Where(s=>s.Phone!=null).Select(s=>s.Phone).ToArray();}foreach(var worker in workers)worker.SetDiagnostics(diagnostics);}
+#endif
   public void FeedTest(string id,byte[] pcm){if(!id.StartsWith("test:"))throw new ArgumentException("Synthetic input only");lock(gate){Source source;if(!sources.TryGetValue(id,out source))throw new ArgumentException("Input not present");source.Inject(pcm);}}
   public bool TryUpdateEffect(ModuleSpec value){var replacement=value.Copy();GraphCompiler.ValidateModule(replacement);if(!new[]{"volume","mute","equalizer","voice","delay","limiter"}.Contains(replacement.Kind))return false;lock(gate){if(!plan.Order.Contains(replacement.Id)||!plan.Modules.Any(m=>m.Id==replacement.Id&&m.Kind==replacement.Kind))return false;plan=GraphPlan.Create(plan.Edges,plan.Modules.Select(m=>m.Id==replacement.Id?replacement:m).ToArray());requestedPlan=GraphPlan.Create(requestedPlan.Edges,requestedPlan.Modules.Select(m=>m.Id==replacement.Id?replacement.Copy():m).ToArray());return true;}}
   public void UpdateModules(ModuleSpec[] updated){foreach(var m in updated)GraphCompiler.ValidateModule(m);lock(gate){var replacements=plan.Modules.Select(old=>updated.FirstOrDefault(m=>m.Id==old.Id)??old).ToArray();plan=GraphPlan.Create(plan.Edges,replacements);}}
@@ -145,7 +148,10 @@ namespace AirBridge.Routing {
   }}
   // A software clock is only needed for graphs without any hardware playback sink
   // (e.g. recording/network-only). Hardware outputs pull at their own WASAPI deadlines.
-  void Render(){var watch=Stopwatch.StartNew();double due=0;while(!stopping){if(watch.Elapsed.TotalMilliseconds<due){Thread.Sleep(1);continue;}due=watch.Elapsed.TotalMilliseconds+10;
+  void Render(){var watch=Stopwatch.StartNew();double due=0;while(!stopping){
+   bool softwareClock;lock(gate)softwareClock=outputs.Count==0&&(plan.Order.Length>0||sources.Count>0);
+   if(!softwareClock){Thread.Sleep(50);due=watch.Elapsed.TotalMilliseconds;continue;}
+   double remaining=due-watch.Elapsed.TotalMilliseconds;if(remaining>0){Thread.Sleep(1);continue;}due=watch.Elapsed.TotalMilliseconds+10;
    try{lock(gate){if(outputs.Count==0&&(plan.Order.Length>0||sources.Count>0))RenderBlock();}}catch(Exception ex){Error=ex.Message;}
   }}
   public void Dispose(){lock(applyGate){if(stopping)return;StopVirtualRendering();Exception restoreError=null;try{if(appRoutes!=null)appRoutes.Restore();}catch(Exception ex){restoreError=ex;}try{if(defaultRoute!=null)defaultRoute.Restore();}catch(Exception ex){restoreError=ex;}

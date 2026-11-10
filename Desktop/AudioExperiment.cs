@@ -1,4 +1,5 @@
-﻿using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Threading.Tasks;using AirBridge.Routing;
+#if AIRBRIDGE_DEVELOPMENT
+using System;using System.IO;using System.Linq;using System.Collections.Generic;using System.Threading.Tasks;using AirBridge.Routing;
 namespace AirBridge.Desktop {
  internal sealed class AudioExperiment {
   public static bool Enabled;int phase=-1;DateTime next,started;Task switchTask;string path;RouteState[] baseline;readonly Dictionary<string,double> buffers=new Dictionary<string,double>();int samples;
@@ -19,3 +20,5 @@ namespace AirBridge.Desktop {
   void Start(GraphRuntime engine,int index){phase=index;switchTask=Task.Run(()=>engine.ConfigurePhoneBuffers(sizes[index],false,logs[index]));}
  }
 }
+
+#endif

@@ -33,3 +33,5 @@ startup-migration.json
 ROLLBACK-*.json
 latest-build.txt
 latest-signed.txt
+*.storage.xml*
+/Data/

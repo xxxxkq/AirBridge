@@ -1,3 +1,4 @@
+#if AIRBRIDGE_DEVELOPMENT
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -88,3 +89,5 @@ namespace AirBridge.Routing {
   public ComparisonSession BeginOutputComparison(OutputComparisonConfig config){return new ComparisonSession(this,config);}
  }
 }
+
+#endif

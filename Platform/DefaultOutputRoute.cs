@@ -11,6 +11,9 @@ namespace AirBridge.Routing {
   public DefaultOutputRoute(string path):this(path,AirBridge.Platform.Audio.DefaultId,AirBridge.Platform.OutputSwitch.SelectRole,id=>AirBridge.Platform.Audio.List().Any(e=>e.Id==id&&e.Active)){}
   public DefaultOutputRoute(string path,Func<int,string> read,Action<string,int> write,Func<string,bool> available){if(String.IsNullOrWhiteSpace(path))throw new ArgumentException("默认输出管理需要恢复日志路径。");this.path=Path.GetFullPath(path);this.read=read;this.write=write;this.available=available;if(File.Exists(this.path)){var doc=new XmlDocument{XmlResolver=null};doc.Load(this.path);foreach(XmlElement e in doc.SelectNodes("/defaults/role")){int role=Int32.Parse(e.GetAttribute("id"));if(role<0||role>1||records.Any(r=>r.Role==role))throw new InvalidDataException("默认输出恢复记录无效。");records.Add(new Entry{Role=role,Original=e.GetAttribute("original"),Written=e.GetAttribute("written"),Previous=e.GetAttribute("previous"),Pending=e.GetAttribute("pending")=="true"});}}}
   public int PendingCount{get{return records.Count;}}
+  // A deliberate user choice may equal Written; equality alone cannot identify ownership.
+  // Caller excludes virtual sinks. This changes only the recovery baseline, never Windows.
+  public void RememberUserSelection(string target){if(String.IsNullOrEmpty(target)||!available(target))return;var baseline=records.Select(e=>e.Copy()).ToArray();bool changed=false;foreach(var r in records)if(Equal(read(r.Role),target)&&!Equal(r.Original,target)){r.Original=target;changed=true;}if(!changed)return;try{Save();}catch{records.Clear();records.AddRange(baseline);throw;}}
   public string OriginalId(int role){var entry=records.FirstOrDefault(e=>e.Role==role);return entry==null?read(role):entry.Original;}
   static bool Equal(string a,string b){return String.Equals(a,b,StringComparison.OrdinalIgnoreCase);}
   static bool Owned(Entry e,string current){return Equal(current,e.Written)||(e.Pending&&Equal(current,e.Previous));}

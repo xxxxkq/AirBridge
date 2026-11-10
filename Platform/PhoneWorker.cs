@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
@@ -15,6 +15,7 @@ namespace AirBridge.Routing {
   static readonly object transportGate=new object();static long nextOperation;
   readonly long generation=Interlocked.Increment(ref nextOperation);int closing;
   static readonly System.Collections.Concurrent.ConcurrentDictionary<PhoneWorkerClient,byte> clients=new System.Collections.Concurrent.ConcurrentDictionary<PhoneWorkerClient,byte>();static int shuttingDown;
+  public static int[] RunningProcessIds {get{return clients.Keys.Select(c=>c.ProcessId).Where(p=>p>0).Distinct().ToArray();}}
   // Process-wide terminal shutdown: reject late starts and close independent owners together.
   public static Task ShutdownAllAsync(){Interlocked.Exchange(ref shuttingDown,1);return Task.WhenAll(clients.Keys.Select(c=>Task.Run(()=>c.Dispose())).ToArray());}
   public static string DiagnosticPath;
@@ -34,7 +35,11 @@ namespace AirBridge.Routing {
   public volatile bool Connected;public string Error="";
   public int ProcessId {get{lock(lifetime)return child==null?0:child.Id;}}
   public PhoneWorkerClient(string id,Action<byte[],int> receive,Action<Exception> fail):this(id,"capture",receive,fail){}
-  public PhoneWorkerClient(string id,string mode,Action<byte[],int> receive,Action<Exception> fail){this.id=id;this.mode=mode;this.receive=receive;this.fail=fail;}
+  public PhoneWorkerClient(string id,string mode,Action<byte[],int> receive,Action<Exception> fail){
+#if !AIRBRIDGE_DEVELOPMENT
+if(mode!="capture"&&mode!="receiver")throw new ArgumentException("Invalid worker mode");
+#endif
+this.id=id;this.mode=mode;this.receive=receive;this.fail=fail;}
   public string DiagnosticIdentity{get{return Volatile.Read(ref loggedPid)+":"+generation;}}
   public void Start(){
    var queued=Stopwatch.StartNew();lock(transportGate){
@@ -138,16 +143,27 @@ namespace AirBridge.Routing {
       var starting=Convert(receiver.StartAsync(),null);if(!starting.Wait(30000))throw new TimeoutException("手机连接启动超时。");starting.GetAwaiter().GetResult();
       var opening=(Task<AudioPlaybackConnectionOpenResult>)Convert(receiver.OpenAsync(),typeof(AudioPlaybackConnectionOpenResult));if(!opening.Wait(30000))throw new TimeoutException("手机连接打开超时。");
       if(opening.Result.Status!=AudioPlaybackConnectionOpenResultStatus.Success&&receiver.State!=AudioPlaybackConnectionState.Opened)throw new IOException("Bluetooth: "+opening.Result.Status+" "+opening.Result.ExtendedError);
-     }else if(mode!="diagnostic-pcm"&&mode!="diagnostic-exit"&&mode!="diagnostic-hang"&&mode!="diagnostic-slow")throw new ArgumentException("Invalid worker mode");
+     }
+#if AIRBRIDGE_DEVELOPMENT
+else if(mode!="diagnostic-pcm"&&mode!="diagnostic-exit"&&mode!="diagnostic-hang"&&mode!="diagnostic-slow")throw new ArgumentException("Invalid worker mode");
      if(mode=="diagnostic-slow")Thread.Sleep(800);
+#else
+else throw new ArgumentException("Invalid worker mode");
+#endif
      lock(outputGate){output.Write(1);output.Flush();}
+#if AIRBRIDGE_DEVELOPMENT
      long frames=0;
+#endif
      while(!stop.WaitOne(10)){
+#if AIRBRIDGE_DEVELOPMENT
       if(mode=="diagnostic-exit")Environment.Exit(17);
       if(mode=="diagnostic-pcm"){byte[] data=new byte[1764];for(int i=0;i<data.Length;i+=2){data[i]=0x34;data[i+1]=0x12;}lock(outputGate){frames++;pcmPacket.Write(pipe,data,1764,frames,frames*882,0x1234,0,0,0);}}
+#endif
       if(receiver!=null&&receiver.State==AudioPlaybackConnectionState.Closed)throw new IOException("手机蓝牙音频连接已关闭。");
      }
+#if AIRBRIDGE_DEVELOPMENT
      if(mode=="diagnostic-hang")Thread.Sleep(Timeout.Infinite);
+#endif
      return 0;
     }catch(Exception ex){try{lock(outputGate){var output=new BinaryWriter(pipe);byte[] text=System.Text.Encoding.UTF8.GetBytes(ex.GetBaseException().Message);if(text.Length>8192)Array.Resize(ref text,8192);output.Write(3);output.Write(text.Length);output.Write(text);output.Flush();}}catch{}return 1;}
     finally{try{if(capture!=null)capture.Dispose();if(receiver!=null)receiver.Dispose();}finally{if(owner!=null){if(owns)owner.ReleaseMutex();owner.Dispose();}}}

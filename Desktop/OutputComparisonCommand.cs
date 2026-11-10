@@ -1,4 +1,5 @@
-﻿using System;
+#if AIRBRIDGE_DEVELOPMENT
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -55,3 +56,5 @@ namespace AirBridge.Desktop {
   }
  }
 }
+
+#endif
