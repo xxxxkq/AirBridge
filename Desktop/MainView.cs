@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -29,7 +29,7 @@ namespace AirBridge.Desktop {
   internal StackPanel Glyph(int code,string text){var p=new StackPanel{Orientation=Orientation.Horizontal};p.Children.Add(new TextBlock{Text=Char.ConvertFromUtf32(code),FontFamily=new FontFamily("Segoe Fluent Icons"),FontSize=16,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,14,0)});var label=Label(text);label.VerticalAlignment=VerticalAlignment.Center;p.Children.Add(label);return p;}
   internal Button Button(string text,Action action){var b=new Button{Content=text};b.Click+=(s,e)=>{try{action();}catch(Exception ex){Error(ex);}};return b;}
   internal void Click(string name,Action action){U<Button>(name).Click+=(s,e)=>{try{action();}catch(Exception ex){Error(ex);}};}
-  internal void Error(Exception ex){Notify(ex.GetBaseException().Message);Log(ex.ToString());}
+  internal void Error(Exception ex){Notify(PlaybackOutputException.Display(ex,L("zh","en")=="en"));Log(ex.ToString());}
   internal void Log(string text){if(settings.Test||settings.Text("LogLevel")=="Off")return;try{string path=Path.Combine(settings.Root,"AirBridge-desktop.log");if(File.Exists(path)&&new FileInfo(path).Length>1048576){if(File.Exists(path+".1"))File.Delete(path+".1");File.Move(path,path+".1");}File.AppendAllText(path,DateTime.Now.ToString("o")+" "+text+Environment.NewLine);}catch{}}
   internal async void Run(Func<Task> action){try{await action();}catch(Exception ex){if(!exiting)Error(ex);else Log(ex.ToString());}}
   public MainView(SettingsStore settings,EventWaitHandle signal,bool background){this.settings=settings;this.signal=signal;this.background=background;phones=new PhoneService(settings);routes=new RouteCoordinator(settings,phones);

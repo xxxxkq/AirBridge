@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,7 +10,7 @@ using NAudio.Wave.SampleProviders;
 namespace AirBridge.Routing {
  public sealed class ApplicationInput {public string Id {get;set;} public string Name {get;set;} public string Path {get;set;}}
  public sealed partial class GraphRuntime:IDisposable {
-  public bool VirtualPcEnabled;public Action EnsureRecoveryWatcher;public bool VirtualPcActive{get;private set;}string virtualCapture="",virtualPhysical="",virtualSource="";bool virtualDefaultAlias;
+  public Action<string> OutputDiagnostic;public bool VirtualPcEnabled;public Action EnsureRecoveryWatcher;public bool VirtualPcActive{get;private set;}string virtualCapture="",virtualPhysical="",virtualSource="";bool virtualDefaultAlias;
   public bool VirtualPathFailed{get{lock(gate){Source s;return VirtualPcActive&&((sources.TryGetValue(virtualCapture,out s)&&s.Error!="")||outputs.Values.Any(o=>o.Error!=""));}}}
 
   readonly object gate=new object(),applyGate=new object();Dictionary<string,Source> sources=new Dictionary<string,Source>();Dictionary<string,Output> outputs=new Dictionary<string,Output>();Dictionary<string,Module> modules=new Dictionary<string,Module>();GraphPlan plan=GraphPlan.Create(new GraphEdge[0],new ModuleSpec[0]);readonly Thread thread,nativeThread;readonly object nativeGate=new object();readonly PcAudioControl native=new PcAudioControl();volatile bool applied,nativePassThrough,processCopy;public string AppRoutingJournal;NativeAppRoutes appRoutes;DefaultOutputRoute defaultRoute;public string DefaultRoutingJournal;public string PhoneDiagnosticPath{set{PhoneWorkerClient.DiagnosticPath=value;}}string nativeTarget="o:default";public bool HasManagedDefault{get{return applied&&nativePassThrough;}}GraphEdge[] managedApps=new GraphEdge[0];public int ManagedAppCount {get{lock(gate)return managedApps.Length;}}int pendingRestoresSnapshot;
@@ -203,7 +203,7 @@ public double BufferedMilliseconds{get{lock(gate)return buffer==null?0:buffer.Bu
    public void Dispose(){if(Phone!=null)Phone.Dispose();if(process!=null)process.Dispose();if(rtp!=null)rtp.Dispose();if(capture!=null){capture.StopRecording();capture.Dispose();}if(device!=null)device.Dispose();}
   }
   sealed class Output:IDisposable {
-   readonly int latency;readonly string id;string deviceId="";readonly GraphRuntime graph;MMDevice device;BufferedWaveProvider buffer;WasapiOut player;bool playing,paused;volatile bool stopping;
+   readonly int latency;readonly string id;string deviceId="";readonly GraphRuntime graph;BufferedWaveProvider buffer;PlaybackOutput player;bool playing,paused;volatile bool stopping;
    readonly object outputGate=new object();public readonly AudioReadMetrics Metrics=new AudioReadMetrics();public long Bytes,ReadBytes;public string Error="";
    public double MaxReadIntervalMilliseconds,MaxReadWorkMilliseconds;long lastReadAt;
    public Output(string id,GraphRuntime graph):this(id,graph,graph.tuning.OutputLatencyMs){}
@@ -212,7 +212,7 @@ public double BufferedMilliseconds{get{lock(gate)return buffer==null?0:buffer.Bu
    void InitializeBuffer(){buffer=new BufferedWaveProvider(new WaveFormat(44100,16,2)){BufferDuration=TimeSpan.FromSeconds(2),ReadFully=true,DiscardOnBufferOverflow=true};}
    public string DeviceId{get{return deviceId;}}
    public int BufferedBytes{get{lock(outputGate)return buffer.BufferedBytes;}}
-   public void Open(){using(var e=new MMDeviceEnumerator())device=id=="default"?e.GetDefaultAudioEndpoint(DataFlow.Render,Role.Multimedia):e.GetDevice(id);deviceId=device.ID;player=new WasapiOut(device,AudioClientShareMode.Shared,true,latency);player.Init(new DemandProvider(this));player.PlaybackStopped+=(s,e)=>{if(!stopping&&!paused)Error=e.Exception==null?"输出停止":e.Exception.Message;};}
+   public void Open(){player=new PlaybackOutput(id,new DemandProvider(this),latency,graph.OutputDiagnostic);deviceId=player.DeviceId;player.PlaybackStopped+=(s,e)=>{if(!stopping&&!paused)Error=e.Exception==null?"输出停止":e.Exception.Message;};}
    public void Start(){if(playing||stopping||player==null)return;playing=true;paused=false;Error="";try{player.Play();}catch(Exception ex){Error=ex.Message;}}
    sealed class DemandProvider:IWaveProvider {readonly Output owner;public DemandProvider(Output owner){this.owner=owner;}public WaveFormat WaveFormat{get{return owner.buffer.WaveFormat;}}public int Read(byte[] data,int offset,int count){return owner.Read(data,offset,count);}}
    public int Read(byte[] data,int offset,int count){long begin=Stopwatch.GetTimestamp();try{if(stopping){Array.Clear(data,offset,count);return count;}return graph.ReadOutput(this,data,offset,count);}finally{AudioTimingTrace.Record("output-read",DeviceId,begin,count);lock(outputGate){if(lastReadAt!=0)MaxReadIntervalMilliseconds=Math.Max(MaxReadIntervalMilliseconds,(begin-lastReadAt)*1000.0/Stopwatch.Frequency);lastReadAt=begin;MaxReadWorkMilliseconds=Math.Max(MaxReadWorkMilliseconds,(Stopwatch.GetTimestamp()-begin)*1000.0/Stopwatch.Frequency);}}}
@@ -220,7 +220,7 @@ public double BufferedMilliseconds{get{lock(gate)return buffer==null?0:buffer.Bu
    public void Add(byte[] b){if(Error!=""||stopping)return;lock(outputGate){if(buffer.BufferedDuration.TotalMilliseconds>graph.tuning.OutputOverflowMs){AudioTimingTrace.Record("output-overflow-clear",DeviceId,AudioTimingTrace.Now(),buffer.BufferedBytes);Metrics.Clear(buffer.BufferedBytes,true);buffer.ClearBuffer();}buffer.AddSamples(b,0,b.Length);Bytes+=b.Length;}}
    public void ClearQueued(){lock(outputGate){Metrics.Clear(buffer.BufferedBytes,false);buffer.ClearBuffer();}}
    public void StopForRestore(){stopping=true;Error="输出已停止，等待恢复";try{if(player!=null)player.Stop();}catch(Exception ex){Error=ex.Message;}ClearQueued();}
-   public void Dispose(){stopping=true;if(player!=null){player.Stop();player.Dispose();}if(device!=null)device.Dispose();}
+   public void Dispose(){stopping=true;if(player!=null)player.Dispose();}
   }
 
   sealed class Module:IDisposable {public readonly string Kind;readonly BlockProcessor processor=new BlockProcessor();WaveRecorder recorder;RtpSender sender;string key="";public string Error="";public Module(string kind){Kind=kind;}

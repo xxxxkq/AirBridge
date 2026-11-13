@@ -17,6 +17,7 @@ class IPhonePipeline {
  static object Field(object o,string name){return o.GetType().GetField(name,All).GetValue(o);}
  static void Set(object o,string name,object value){o.GetType().GetField(name,All).SetValue(o,value);}
  static object Call(object o,string name,params object[] args){return o.GetType().GetMethod(name,All).Invoke(o,args);}
+ sealed class PullProvider:IWaveProvider {readonly object output;public PullProvider(object value){output=value;}public WaveFormat WaveFormat{get{return new WaveFormat(44100,16,2);}}public int Read(byte[] data,int offset,int count){return (int)Call(output,"Read",data,offset,count);}}
  static byte[] Tone(){var b=new byte[1764];for(int i=0;i<b.Length;i+=2)b[i+1]=16;return b;}
  static object NewSource(){var s=Activator.CreateInstance(Source,All,null,new object[]{"p:offline",null},null);var b=new BufferedWaveProvider(new WaveFormat(44100,16,2)){BufferDuration=TimeSpan.FromSeconds(2),ReadFully=true};Set(s,"buffer",b);Set(s,"sample",b.ToSampleProvider());Call(s,"ConfigureJitter",10,false);return s;}
  static void Put(object s){Call(s,"Inject",Tone());}
@@ -41,6 +42,9 @@ class IPhonePipeline {
   var old=Out(g,"o:A");var replacement=Activator.CreateInstance(Output,All,null,new object[]{"A",g},null);((IDictionary)Field(g,"outputs"))["o:A"]=replacement;Put(normal);Check(!Signal(Pull(old))&&Signal(Pull(replacement)),"replaced output cannot consume source frames");
   Call(replacement,"Add",Tone());var shortRead=new byte[3528];Call(replacement,"ReadBuffered",shortRead,0,shortRead.Length);Check(Metrics(replacement).MissingBytes==1764,"output short-read counts actual missing bytes");
   for(int i=0;i<42;i++)Call(replacement,"Add",Tone());Check(Metrics(replacement).QueueOverflowCount==1&&Metrics(replacement).QueueDroppedBytes==41*1764,"output queue clearing has exact loss counter");
+  var adapted=NewSource();var ag=NewGraph(adapted,"o:A","o:B");var converted=OutputFormatAdapter.Convert(new PullProvider(Out(ag,"o:A")),new WaveFormatExtensible(48000,32,2));var convertedBytes=new byte[480*8];
+  for(int i=0;i<100;i++){Put(adapted);converted.Read(convertedBytes,0,convertedBytes.Length);Pull(Out(ag,"o:B"));}Check(Metrics(adapted).MissingBytes==0,"48k conversion and 44.1k output share graph frames without new shortages");
+  for(int i=0;i<10;i++){converted.Read(convertedBytes,0,convertedBytes.Length);Pull(Out(ag,"o:B"));}Check(Enumerable.Range(0,convertedBytes.Length/4).All(i=>Math.Abs(BitConverter.ToSingle(convertedBytes,i*4))<0.000001),"converted output decays to silence during pause without repeating old samples");Put(adapted);converted.Read(convertedBytes,0,convertedBytes.Length);Check(Enumerable.Range(0,convertedBytes.Length/4).Any(i=>Math.Abs(BitConverter.ToSingle(convertedBytes,i*4))>0.0001),"converted output resumes without reopening the source");
   Console.WriteLine("PASS total="+passed+"; buffer=10ms/adaptive=false; hardware never opened");
  }
 }

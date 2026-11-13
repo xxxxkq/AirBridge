@@ -1,4 +1,4 @@
-param([string]$Release = '.\build\dev')
+﻿param([string]$Release = '.\build\dev')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
 $releasePath = (Resolve-Path -LiteralPath $Release).Path
@@ -14,7 +14,7 @@ $refs = @('/reference:System.Core.dll','/reference:System.Web.Extensions.dll',('
 foreach ($name in @('AirBridge.Core.dll','AirBridge.Routing.dll','NAudio.Core.dll','NAudio.Wasapi.dll')) {
     $refs += '/reference:' + (Join-Path $testPath $name)
 }
-foreach ($name in @('PhoneAudioQualityTests','PhoneJitterMeasuredTests','PlaybackTuningTests','JitterTests','OutputPreferenceTests')) {
+foreach ($name in @('PhoneAudioQualityTests','PhoneJitterMeasuredTests','PlaybackTuningTests','JitterTests','OutputPreferenceTests','OutputFormatTests')) {
     $exe = Join-Path $testPath ($name+'.exe')
     $sources = @((Join-Path $repo ('Tests/'+$name+'.cs')))
     if ($name -eq 'OutputPreferenceTests') { $sources += Join-Path $repo 'Tests/DefaultRoute.Tests.cs' }
